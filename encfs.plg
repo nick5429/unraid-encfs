@@ -1,0 +1,546 @@
+<?xml version='1.0' standalone='yes'?>
+<PLUGIN>
+
+<!--
+2012-10-03 0.1-beta		Put together an initial version.
+
+DISCLAIMER: This seems to work for me on unraid 5.0-rc6-r8168-test2. I offer this plugin as a convenience and offer no warranty or guarantee.  If you lose all your encrypted data, or if through some failing the data is actually not encrypted after all, or your password gets leaked, I'm sorry, but I claim no responsibility.
+
+Features:
+    * Automatically downloads/installs/sets up all the needed packages and dependencies for EncFs
+    * Gives explicit instructions on how to do the initial creation of the encrypted "volume" [note: it's not really a volume with EncFs. Each file is encrypted and stored separate, so you don't need to worry about figure out how big your "volume" will eventually be, and waste space in the meantime]
+    * Provides an interface in the unRAID web GUI to provide your encryption password and mount/unmount the encrypted "volume"
+    * Attempts to unmount the EncFs volume when unRAID is triggered to shut down
+
+To Do / Planned:
+	* If someone wants to make a prettier icon for this, that would be swell! Just send it to me and I'll include it :)
+	* Add configurable 'unmount after X idle minutes' option (pass as an option to the encfs mount command)
+	* Add support for multiple encrypted mounts
+		- Maybe. Don't hold your breath. I only use one encfs volume right now and so far this works fine for me as-is. Feel free to add it and re-contribute the source :)
+	
+Unlikely:
+	* Support for creating the encrypted mountpoint from within the plugin.  Too much to go wrong.  Just follow the instructions on the plugin's page to do it on the command line.
+	
+Notes:
+	* I haven't tested moving the "install directory"
+	* It seems like a good idea to set up your backing store to be on a specific disk, rather than on a user share.  
+	  encFs has one magic metadata file stored in the backing store that's required to decode any and all data (in addition to your password)
+	  If you set it up on a user share, make sure you back this up separately if you want a chance of recovering your data in a multi-disk failure.
+	* If you ever access the decrypted mountpoint via a user share rather than from a disk# share, it seems like a good idea set up unraid to ONLY write that usershare's data to that specific disk.  Otherwise, it could potentially write outside the encrypted container when copying stuff over.
+	
+Known issues:
+	* Sometimes the mounting is flaky through the 'expect' script used to mount from the web interface.  I've never had this happen when calling encfs directly from the command line, even after it happens through the web interface.
+      It appears to be executing the same command, but doing an "ls $mountpoint" will come back with "Transport endpoint is not connected"
+	  Unmounting, deleting the mountpoint directory, and letting encfs re-create it fixed the problem for me sometimes.
+	  I can't figure out what causes this, and it's really annoying.  If it happens to you and you can figure it out (and even better, how to reliably fix/work around it), that would be swell.
+	  
+	* Sometimes after mounting through the webpage interface, the page remains loading indefinitely after displaying that it's trying to mount. Maybe the expect script isn't returning?
+	  It's got a 10 second timeout though, so that shouldn't be the issue...
+	  Mounting seems to always work fine when this happens, just click another link in the UI and come back if you want.
+	  
+	  
+Developer notes:	  
+  For reference, in bash script you can do:
+    n=123
+	let test$n=$n*2
+	varName=test$n
+	echo ${varName} #retuns test123
+	echo ${!varName} #returns 246
+  This seems useful for working on more than 1 mountpoint
+  
+  This page has some useful info: http://ubuntuforums.org/showthread.php?t=1420413
+  
+  General plugin file locations:
+  /boot/plugins/		# directory for system plugins (updated with new releases)
+  /boot/config/plugins/		# directory for user plugins
+  /boot/packages/		# downloaded slackware packages
+
+  
+-->
+
+<!-- required slack packages to be downloaded should come first -->
+
+<!--
+We need boost, rlog, and tcl for encfs itself
+
+We need expect to give the password to encfs
+-->
+<FILE Name="/boot/packages/boost-1.42.0-i486-1.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.cs.utah.edu/pub/slackware/slackware-13.1/slackware/l/boost-1.42.0-i486-1.txz</URL>
+</FILE>
+
+<FILE Name="/boot/packages/rlog-1.4-i486-5sl.txz" Run="upgradepkg --install-new">
+<URL>http://www.slackware.org.uk/slacky/slackware-13.1/system/rlog/1.4/rlog-1.4-i486-5sl.txz</URL>
+</FILE>
+
+<FILE Name="/boot/packages/tcl-8.5.8-i486-1.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.mirrors.tds.net/pub/slackware/slackware-13.1/slackware/tcl/tcl-8.5.8-i486-1.txz</URL>
+</FILE>
+
+<FILE Name="/boot/packages/expect-5.44.1.11-i486-3.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.cs.utah.edu/pub/slackware/slackware-13.1/slackware/tcl/expect-5.44.1.11-i486-3.txz</URL>
+</FILE>
+
+
+
+<!-- other files to be downloaded should come next -->
+
+<!--
+Now we install encfs
+-->
+<FILE Name="/boot/packages/encfs-1.7.4-i486-1sl.txz" Run="upgradepkg --install-new">
+<URL>http://darkstar.ist.utl.pt/slackware/addon/slacky/slackware-13.1/system/encfs/1.7.4/encfs-1.7.4-i486-1sl.txz</URL>
+</FILE>
+
+<!--
+Here is the icon file.  Icons should be 48x48 pixels, preferably .png files. No need to check the MD5
+so we don't include that element.  Again, we store this in plugin-specific persistent directory to
+avoid having to re-download.
+-->
+<FILE Name="/boot/config/plugins/encfs/encfs.png">
+<URL>http://nickmerryman.com/unraid/encfs/encfs.png</URL>
+</FILE>
+
+<!--
+Here is an "INLINE" file.  Note that we use a CDATA section to contain the text of the file.  This
+is to prevent the XML parser from "interpreting" the contents and permits us to not be concerned
+with "escaping" certain characters.  When an INLINE file is created, the php trim() function is used
+to strip off any leading and trailing whitespace from the INLINE data contents.
+This particular file is a small "plugin configuration" file.  It will be referenced by
+the install script and control script.  This file is in the form of a PHP "ini" file.
+-->
+<FILE Name="/boot/config/plugins/encfs/encfs.cfg">
+<INLINE>
+<![CDATA[
+# encfs configuration
+SERVICE="disable"
+INSTALLDIR="/usr/local/encfs"
+ENCDIR0="/mnt/disk1/.encStore/test"
+DECDIR0="/mnt/disk1/decStore/test"
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Here is another INLINE file that defines the encfs control script.  This script follows the form
+of other control scripts in the /etc/rc.d directory.  Since we will be "executing" this script as a
+command from other scripts, we must set it's "mode" to be executable using the Mode attribute.
+Control scripts normally include start, stop, and restart functions.  
+-->
+<FILE Name="/etc/rc.d/rc.encfs" Mode="0770">
+<INLINE>
+<![CDATA[
+#!/bin/sh
+# Start/stop/restart/enable/disable encfs.
+
+encfs_start() {
+  # no-op if not enabled
+  if [ $SERVICE != "enable" ]; then
+    return
+  fi
+  echo "user_allow_other" >> /etc/fuse.conf
+  echo -n "We need the password before anything can be mounted<br>\n"
+  echo
+}
+												
+encfs_stop() {
+  # no-op if not running
+  if ! grep -q "$DECDIR0" /etc/mtab ; then
+    echo -n "encFs on $DECDIR0 not mounted"
+    return
+  fi  
+  
+  CMDLINE="umount $DECDIR0"
+  echo -n "Unmounting encFs on $DECDIR0:  $CMDLINE\n"
+  $CMDLINE
+  echo
+  
+  # sleep 5
+}
+
+encfs_unmount() {
+  # no-op if not running
+  if ! grep -q "$1" /etc/mtab ; then
+    echo -n "encFs on $1 not mounted"
+    return
+  fi  
+  
+  CMDLINE="umount $1"
+  echo -n "Unmounting encFs on $1:  $CMDLINE\n"
+  $CMDLINE
+  echo
+  
+  # sleep 5
+}
+
+encfs_mount() {
+  # no if already running
+  if grep -q "$DECDIR0" /etc/mtab ; then
+    echo -n "encFs on $DECDIR0 already mounted"
+	# sleep 5
+    return
+  fi  
+  
+  if ls "$DECDIR0/*" 2> /dev/null; then
+    echo -n "$DECDIR0 is not empty. Will not mount.";
+	# sleep 5
+	return
+  fi  
+  
+  CMDLINE="$INSTALLDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
+  echo -n "mounting encFs on $DECDIR0:  $INSTALLDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
+  $CMDLINE
+  echo
+  echo -n "Returned from expect script. Done.<br>\n"
+  # sleep 5
+}
+
+encfs_restart() {
+  encfs_stop
+  sleep 1
+  encfs_start
+}
+
+write_config() {
+  echo "# encfs configuration" > /boot/config/plugins/encfs/encfs.cfg
+  echo "SERVICE=\"$SERVICE\"" >> /boot/config/plugins/encfs/encfs.cfg
+  echo "INSTALLDIR=\"$INSTALLDIR\"" >> /boot/config/plugins/encfs/encfs.cfg
+  echo "ENCDIR0=\"$ENCDIR0\"" >> /boot/config/plugins/encfs/encfs.cfg
+  echo "DECDIR0=\"$DECDIR0\"" >> /boot/config/plugins/encfs/encfs.cfg
+}
+
+encfs_enable() {
+  # if not already enabled, enable it
+  echo -n "Working on enabling encfs '$1' '$2' '$3'<br>\n"
+  if [ "$SERVICE" != "enable" ]; then
+    SERVICE=enable
+	echo -n "Enabling encfs $1 $2 $3\n"
+	
+    # if different install dir specified, move codebase over there
+    if [ "$1" != "" -a "$1" != "$INSTALLDIR" ]; then
+      if [ -h /usr/local/encfs ]; then
+	    rm /usr/local/encfs
+      fi
+      if [ ! -e "$1" ]; then 
+        mkdir -p "$1"
+      fi
+      echo -n "Moving encfs to $1"
+      mv "$INSTALLDIR"/* "$1"
+      rmdir "$INSTALLDIR"
+      INSTALLDIR="$1"
+      if [ ! -e /usr/local/encfs ]; then
+        ln -s "$INSTALLDIR" /usr/local/encfs
+      fi
+      echo
+    fi
+  fi
+  
+  ENCDIR0=$2
+  DECDIR0=$3
+
+  write_config
+  
+  #make sure 'allow_others' gets initialized
+  encfs_start
+
+  # sleep 5
+}
+												
+encfs_disable() {
+  encfs_stop
+  SERVICE=disable
+  write_config
+}
+
+# read our configuration
+source /boot/config/plugins/encfs/encfs.cfg
+
+case "$1" in
+'start')
+  encfs_start
+  ;;
+'stop')
+  encfs_stop
+  ;;
+'mount')
+  encfs_mount $2
+  ;;
+'unmount')
+  encfs_unmount $2
+  ;;  
+'restart')
+  encfs_restart
+  ;;
+'enable')
+  encfs_enable $2 $3 $4
+  ;;
+'disable')
+  encfs_disable
+  ;;
+*)
+  echo "usage $0 start|stop|restart|enable|disable"
+esac
+
+]]>
+</INLINE>
+</FILE>
+
+<!-- Here are some files required to hook the plugin into the unRaid webGui menu system. -->
+
+<!-- 
+The page file defines which menu page the plugin will appear on.
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.page">
+<INLINE>
+<![CDATA[
+Menu="NetworkServices"
+Icon="encfs.png"
+Version="0.1-beta"
+Author="nick5429"
+Type="php"
+]]>
+</INLINE>
+</FILE>
+
+<!--
+This is the icon displayed in the webGui. We use a LOCAL element here to specify that the icon
+file may be found and copied from the local file system.  This is the icon file we downloaded
+previously.  The reason we do this is that the unRaid webGui directory is reinitialized upon each
+reboot, and using a LOCAL file is faster and more reliable than re-downloaded every time.
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.png">
+<LOCAL>/boot/config/plugins/encfs/encfs.png</LOCAL>
+</FILE>
+
+
+<!--
+Here is the PHP code for the encfs webGui configuration page.  
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.php">
+<INLINE>
+<![CDATA[
+<?PHP
+	$logfile = "/var/log/plugins/encfs";
+	$encfs_cfg = parse_ini_file( "/boot/config/plugins/encfs/encfs.cfg");
+	$encfs_running_command = "grep \"" . escapeshellcmd($encfs_cfg['DECDIR0']) . "\" /etc/mtab";
+	$encfs_running_retval = exec_log($encfs_running_command);
+	exec_log("whoami");
+
+	$encfs_running = $encfs_running_retval ? "no" : "yes"; //shell return codes are 0 for success, nonzero for fail
+
+//Logging code taken and modified from the unraid Crashplan plugin. Thanks SeeDrs.
+  function exec_log($cmd) {
+    $results = exec($cmd, $array, $retVal);
+    $results = "\nCMD: $cmd \nResults: $results\n retVal: $retVal";
+    write_log($results);
+	return $retVal;
+  }
+
+  function write_log($contents) {
+    global $logfile;
+    write_string($logfile, "$contents\n", FALSE);
+  }
+    
+  function write_string ($file, $contents, $overwrite) {
+    if (file_exists($file)) {
+      if ($overwrite)
+          unlink($file);
+          touch($file);
+    }
+    else {
+      touch($file);
+    }
+    
+    $fp = @fopen($file, 'a');
+    @flock($fp, LOCK_EX);
+    @fwrite($fp, $contents);
+    @flock($fp, LOCK_UN);
+    @fclose($fp);
+  }
+
+?>
+<!--
+   When this form is submitted, emhttp will see a GET request like this:
+   "GET /update.htm?cmd=/etc/rc.d/rc.encfs&arg1=enable&arg2=/usr/local/encfs&runCmd=Apply"
+   (Actually arg1 can be 'enable' or 'disable' and arg2 is the directory in the form box, provided the
+   field is not disabled.)
+   The 'runCmd=Apply' tells emhttp to run the command given by 'cmd' with arguments 'arg1', 'arg2', ...
+   In this case it will run: "/etc/rc.d/rc.slimserver enable /usr/local/slimserver"
+   The output of this command will show up in the 'progress frame' of the webpage.
+   We have thus constructed the form to control slimserver via the rc.slimserver script.
+   The bit of javascript just causes the INSTALLDIR box to be edit-able only if slimserver is disabled
+   and the user is about to transition it back to enabled.  Simple eh?
+-->
+   <form name="encfs_settings" method="POST" action="/update.htm" target="progressFrame">
+      <input type="hidden" name="cmd" value="/etc/rc.d/rc.encfs">
+      <table class="settings">
+         <tr>
+         <td>Enable encfs:</td>
+         <td><select name="arg1" size="1" onChange="checkINSTALLDIR(this.form);">
+            <?=mk_option($encfs_cfg['SERVICE'], "disable", "No");?>
+            <?=mk_option($encfs_cfg['SERVICE'], "enable", "Yes");?>
+            </select></td>
+         </tr>
+         <tr>
+         <td>Install directory:</td>
+         <td><input type="text" name="arg2" maxlength="40" value="<?=$encfs_cfg['INSTALLDIR'];?>"></td>
+         </tr>
+         <tr>
+         <td>Encrypted backing store directory (no trailing slashes):</td>
+         <td><input type="text" name="arg3" maxlength="100" value="<?=$encfs_cfg['ENCDIR0'];?>"></td>
+         </tr>		 
+         <tr>
+         <td>Decrypted mountpoint directory (no trailing slashes):</td>
+         <td><input type="text" name="arg4" maxlength="100" value="<?=$encfs_cfg['DECDIR0'];?>"></td>
+         </tr>		 
+         <tr>
+         <td></td>
+         <td><input type="submit" name="runCmd" value="Apply"><button type="button" onClick="done();">Done</b>
+         </tr>
+      </table>
+   </form>
+   
+<!--
+	Deal with mounting/unmounting
+-->	
+<hr>
+  <form name="encfs_mounted" method="POST" action="/update.htm" target="progressFrame">
+  <input type="hidden" name="cmd" value="/etc/rc.d/rc.encfs">
+  <table class="mountpoints">
+<? if ($encfs_running=="yes"): ?>
+  <tr>
+	<input type="hidden" name="arg1" value="unmount">
+	<input type="hidden" name="arg2" value="<?=$encfs_cfg['DECDIR0'];?>">
+	<td><p class=ContentTitle>encFs volume is mounted on <?=$encfs_cfg['DECDIR0'];?></p></td>
+	<td><input type="submit" name="runCmd" value="Unmount"></td>
+  </tr>	
+<? else: ?>
+  <tr>
+	<input type="hidden" name="arg1" value="mount">
+	<td></td>
+	<td><p class=ContentTitle>encFs volume at mountpoint <?=$encfs_cfg['DECDIR0'];?> is <b>not</b> mounted</p></td>
+  </tr>
+  <tr>
+	<td>Password:</td>
+	<td><input type="password" name="arg2" maxlength="1024"></td>
+  </tr>  
+  <tr>
+	<td><input type="submit" name="runCmd" value="Mount"></td>
+	<td></td>
+  </tr>	
+<? endif; ?>
+  
+  </table>
+  </form>
+  <hr>
+  <center>
+  This plugin <b>WILL NOT</b> set up the encfs mountpoint/backing stores for you.<br>
+  You need to do it from the command line before attempting to mount from this interface.<br>
+  Note: encfs is rather fussy about permissions and how, precisely, the volume is mounted (especially when trying to get it working over Samba).<br>
+  Following the instructions below exactly <i>should</i> work.
+  <p>
+  First, enable this plugin and configure the directories above<br>
+  Next, ssh to your server (as root), execute the following, and follow the prompts. I use expert mode, choosing AES with a 4096 block size and maximum sized key:<br>
+  <pre>encfs  --public <?=$encfs_cfg['ENCDIR0'];?> <?=$encfs_cfg['DECDIR0'];?> -- -o uid=99 -o gid=100
+  </pre>
+  Then:<br>
+  <pre>chmod 770 -R <?=$encfs_cfg['DECDIR0'];?> <br>umount <?=$encfs_cfg['DECDIR0'];?></pre><br>
+  Now, you can mount the encfs volume through this interface and it should work.
+  </center>
+  <hr>
+  
+
+<script type="text/javascript">
+function checkINSTALLDIR(form)
+{
+   
+  form.arg2.disabled = (form.arg1.value == "disable");
+  form.arg3.disabled = (form.arg1.value == "disable");
+  form.arg4.disabled = (form.arg1.value == "disable");
+
+}
+checkINSTALLDIR(document.encfs_settings);
+</script>
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Here are a couple "event handler" scripts.  These scripts are created in the "event" directory of
+the webGui plugin.  They are invoked automatically by emhttp when the corresponding event occurs.
+In the case of slimserve, the "disk_mounted" event is used to start the server; and the "unmounting_disks"
+even is used to stop the server.  We use the Mode attribute to make these scripts executable.
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/event/disks_mounted" Mode="0770">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+/etc/rc.d/rc.encfs start
+]]>
+</INLINE>
+</FILE>
+
+<!-- event handler -->
+<FILE Name="/usr/local/emhttp/plugins/encfs/event/unmounting_disks" Mode="0770">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+/etc/rc.d/rc.encfs stop
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Here is the plugin installation script.  This script is run every time upon system start-up and/or
+when the plugin is installed.
+-->
+<FILE Name="/tmp/encfs-install" Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# include our config vars
+source /boot/config/plugins/encfs/encfs.cfg
+
+#nothing to do here
+
+]]>
+</INLINE>
+</FILE>
+
+
+<!--
+This is the 'expect' file which deals with the way we have to pass the password to encfs (not via the command line)
+-->
+<FILE Name="/usr/local/encfs/encfsmounter.exp" Mode="0770">
+<INLINE>
+<![CDATA[
+#!/usr/bin/expect -f
+#set variables
+set encdir [lrange $argv 0 0]
+set decdir [lrange $argv 1 1]
+set password [lrange $argv 2 2]
+set timeout 10
+
+spawn encfs --public $encdir $decdir -- -o uid=99 -o gid=100
+
+# Look for password prompt
+expect "*?assword:*"
+send "$password\r"
+expect eof
+]]>
+</INLINE>
+</FILE>
+
+<!--
+The last file defined is a "plugin-installed" file in the /var/log/plugins directory.  The existence
+of this file indicates the plugin is successfully installed.  The contents of this file is taken to
+be text, with possible html markup included.
+-->
+<FILE Name="/var/log/plugins/encfs">
+<INLINE>
+<![CDATA[
+encFs does encryption
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>
