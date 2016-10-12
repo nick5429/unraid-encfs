@@ -88,8 +88,8 @@ We need expect to give the password to encfs
 <!--
 Now we install encfs
 -->
-<FILE Name="/boot/packages/encfs-1.7.4-i486-1sl.txz" Run="upgradepkg --install-new">
-<URL>http://darkstar.ist.utl.pt/slackware/addon/slacky/slackware-13.1/system/encfs/1.7.4/encfs-1.7.4-i486-1sl.txz</URL>
+<FILE Name="/boot/packages/encfs-1.7.4-i486-5sl.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.org.uk/slacky/slackware-14.0/system/encfs/1.7.4/encfs-1.7.4-i486-5sl.txz</URL>
 </FILE>
 
 <!--
