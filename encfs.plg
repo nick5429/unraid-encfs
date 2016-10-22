@@ -4,7 +4,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "encfs">
 <!ENTITY author    "nick5429">
-<!ENTITY version   "2016.10.21.991">
+<!ENTITY version   "2016.10.21b">
 <!ENTITY launch      "Settings/Encfs">
 <!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
 ]>
@@ -38,7 +38,7 @@ Unlikely:
 	* Support for creating the encrypted mountpoint from within the plugin.  Too much to go wrong.  Just follow the instructions on the plugin's page to do it on the command line.
 	
 Notes:
-	* I haven't tested moving the "install directory"
+	* Don't move the "install directory"
 	* It seems like a good idea to set up your backing store to be on a specific disk, rather than on a user share.  
 	  encFs has one magic metadata file stored in the backing store that's required to decode any and all data (in addition to your password)
 	  If you set it up on a user share, make sure you back this up separately if you want a chance of recovering your data in a multi-disk failure.
@@ -135,6 +135,18 @@ SCRIPTDIR="/usr/local/emhttp/plugins/encfs/scripts/"
 ENCDIR0="/mnt/user/.encStore/test"
 DECDIR0="/mnt/user/decStore/test"
 ]]>
+</INLINE>
+</FILE>
+
+
+<!--
+create plugin README.md file
+-->
+<FILE Name="/usr/local/emhttp/plugins/&name;/README.md">
+<INLINE>
+**ENCFS Package**
+
+The Encfs package allows you to create and mount encrypted stores using a FUSE (Filesystem in Userspace) module
 </INLINE>
 </FILE>
 
