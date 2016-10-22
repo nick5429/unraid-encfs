@@ -4,7 +4,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "encfs">
 <!ENTITY author    "nick5429">
-<!ENTITY version   "2016.10.21">
+<!ENTITY version   "2016.10.21.991">
+<!ENTITY launch      "Settings/Encfs">
 <!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
 ]>
 
@@ -12,6 +13,7 @@
 <PLUGIN  name="&name;"
          author="&author;"
          version="&version;"
+		 launch="&launch;"
          pluginURL="&pluginURL;">
 
 <!--
@@ -130,8 +132,8 @@ the install script and control script.  This file is in the form of a PHP "ini" 
 SERVICE="disable"
 INSTALLDIR="/usr/local/emhttp/plugins/encfs/"
 SCRIPTDIR="/usr/local/emhttp/plugins/encfs/scripts/"
-ENCDIR0="/mnt/disk1/.encStore/test"
-DECDIR0="/mnt/disk1/decStore/test"
+ENCDIR0="/mnt/user/.encStore/test"
+DECDIR0="/mnt/user/decStore/test"
 ]]>
 </INLINE>
 </FILE>
@@ -142,7 +144,7 @@ of other control scripts in the /etc/rc.d directory.  Since we will be "executin
 command from other scripts, we must set it's "mode" to be executable using the Mode attribute.
 Control scripts normally include start, stop, and restart functions.  
 -->
-<FILE Name="/etc/rc.d/rc.encfs" Mode="0770">
+<FILE Name="/usr/local/emhttp/plugins/encfs/scripts/rc.encfs" Mode="0770">
 <INLINE>
 <![CDATA[
 #!/bin/sh
@@ -203,10 +205,10 @@ encfs_mount() {
   fi  
   
   CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
-  echo -n "mounting encFs on $DECDIR0:  $INSTALLDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
+  # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
   $CMDLINE
-  echo
-  echo -n "Returned from expect script. Done.<br>\n"
+  # echo
+  # echo -n "Returned from expect script. Done.<br>\n"
   # sleep 5
 }
 
@@ -220,6 +222,7 @@ write_config() {
   echo "# encfs configuration" > /boot/config/plugins/encfs/encfs.cfg
   echo "SERVICE=\"$SERVICE\"" >> /boot/config/plugins/encfs/encfs.cfg
   echo "INSTALLDIR=\"$INSTALLDIR\"" >> /boot/config/plugins/encfs/encfs.cfg
+  echo "SCRIPTDIR=\"$SCRIPTDIR\"" >> /boot/config/plugins/encfs/encfs.cfg
   echo "ENCDIR0=\"$ENCDIR0\"" >> /boot/config/plugins/encfs/encfs.cfg
   echo "DECDIR0=\"$DECDIR0\"" >> /boot/config/plugins/encfs/encfs.cfg
 }
@@ -314,17 +317,19 @@ Version="0.2"
 Author="nick5429"
 Type="php"
 ---
-<?PHP
+<?php
+
+function is_mounted($dir) {
+	$cmd = "/usr/local/emhttp/plugins/encfs/scripts/is_mounted \"" . $dir . "\" " ;
+	return exec_log($cmd);	
+}
+
+
 	$logfile = "/var/log/plugins/encfs";
 	$encfs_cfg = parse_ini_file( "/boot/config/plugins/encfs/encfs.cfg");
 
 	$encfs_running = is_mounted(escapeshellcmd($encfs_cfg['DECDIR0'])) ? "no" : "yes"; //shell return codes are 0 for success, nonzero for fail
-
-function is_mounted($dir) {
-	$cmd = "/usr/local/emhttp/plugins/encfs/scripts/is_mounted \"" . $dir . "\" " ;
-	exec_log($cmd);
 	
-}
 
 
 //Logging code taken and modified from the unraid Crashplan plugin. Thanks SeeDrs.
@@ -360,7 +365,7 @@ function is_mounted($dir) {
 ?>
 <!--
    When this form is submitted, emhttp will see a GET request like this:
-   "GET /update.htm?cmd=/etc/rc.d/rc.encfs&arg1=enable&arg2=/usr/local/encfs&runCmd=Apply"
+   "GET /update.htm?cmd=/usr/local/emhttp/plugins/encfs/scripts/rc.encfs&arg1=enable&arg2=/usr/local/encfs&runCmd=Apply"
    (Actually arg1 can be 'enable' or 'disable' and arg2 is the directory in the form box, provided the
    field is not disabled.)
    The 'runCmd=Apply' tells emhttp to run the command given by 'cmd' with arguments 'arg1', 'arg2', ...
@@ -371,7 +376,7 @@ function is_mounted($dir) {
    and the user is about to transition it back to enabled.  Simple eh?
 -->
    <form name="encfs_settings" method="POST" action="/update.htm" target="progressFrame">
-      <input type="hidden" name="cmd" value="/etc/rc.d/rc.encfs">
+      <input type="hidden" name="cmd" value="/usr/local/emhttp/plugins/encfs/scripts/rc.encfs">
       <table class="settings">
          <tr>
          <td>Enable encfs:</td>
@@ -404,7 +409,7 @@ function is_mounted($dir) {
 -->	
 <hr>
   <form name="encfs_mounted" method="POST" action="/update.htm" target="progressFrame">
-  <input type="hidden" name="cmd" value="/etc/rc.d/rc.encfs">
+  <input type="hidden" name="cmd" value="/usr/local/emhttp/plugins/encfs/scripts/rc.encfs">
   <table class="mountpoints">
 <? if ($encfs_running=="yes"): ?>
   <tr>
@@ -436,8 +441,8 @@ function is_mounted($dir) {
   This plugin <b>WILL NOT</b> set up the encfs mountpoint/backing stores for you.<br>
   You need to do it from the command line before attempting to mount from this interface.<br>
   Note: encfs is rather fussy about permissions and how, precisely, the volume is mounted (especially when trying to get it working over Samba).<br>
-  Following the instructions below exactly <i>should</i> work.
-  <p>
+  Following the instructions below exactly <i>should</i> work. 
+  
   First, enable this plugin and configure the directories above<br>
   Next, ssh to your server (as root), execute the following, and follow the prompts. I use expert mode, choosing AES with a 4096 block size and maximum sized key:<br>
   <pre>encfs  --public <?=$encfs_cfg['ENCDIR0'];?> <?=$encfs_cfg['DECDIR0'];?> -- -o uid=99 -o gid=100
@@ -460,8 +465,6 @@ function checkINSTALLDIR(form)
 }
 checkINSTALLDIR(document.encfs_settings);
 </script>
-
-
 ]]>
 </INLINE>
 </FILE>
@@ -488,7 +491,7 @@ even is used to stop the server.  We use the Mode attribute to make these script
 <INLINE>
 <![CDATA[
 #!/bin/bash
-/etc/rc.d/rc.encfs start
+/usr/local/emhttp/plugins/encfs/scripts/rc.encfs start
 ]]>
 </INLINE>
 </FILE>
@@ -498,7 +501,7 @@ even is used to stop the server.  We use the Mode attribute to make these script
 <INLINE>
 <![CDATA[
 #!/bin/bash
-/etc/rc.d/rc.encfs stop
+/usr/local/emhttp/plugins/encfs/scripts/rc.encfs stop
 ]]>
 </INLINE>
 </FILE>
@@ -523,7 +526,7 @@ source /boot/config/plugins/encfs/encfs.cfg
 <!--
 The 'remove' script.
 -->
-<FILE Name="/usr/local/emhttp/plugins/encfs/scripts/is_mounted" Run="/bin/bash">
+<FILE Name="/usr/local/emhttp/plugins/encfs/scripts/is_mounted" Run="/bin/bash" Mode="0770">
 <INLINE>
 <![CDATA[
 # return 0 if the string is found in /etc/mtab
@@ -538,8 +541,8 @@ The 'remove' script.
 -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-	/etc/rc.d/rc.encfs stop
-	/etc/rc.d/rc.encfs disable
+	/usr/local/emhttp/plugins/encfs/scripts/rc.encfs stop
+	/usr/local/emhttp/plugins/encfs/scripts/rc.encfs disable
 	
 	rm /boot/packages/boost-1.59.0-x86_64-1.txz
 	rm /boot/packages/rlog-1.4-x86_64-1_slonly.txz
@@ -547,9 +550,8 @@ The 'remove' script.
 	rm /boot/packages/expect-5.45-x86_64-1.txz
 	rm /boot/packages/encfs-1.8.1-x86_64-1_slonly.txz
 	
-	rm /etc/rc.d/rc.encfs
+	rm /usr/local/emhttp/plugins/encfs/scripts/rc.encfs
 	
-	removepkg &name;
 	rm -r /usr/local/emhttp/plugins/&name;
 	rm -r /var/log/plugins/&name;
 </INLINE>
@@ -562,19 +564,28 @@ This is the 'expect' file which deals with the way we have to pass the password 
 <FILE Name="/usr/local/emhttp/plugins/encfs/scripts/encfsmounter.exp" Mode="0770">
 <INLINE>
 <![CDATA[
-#!/usr/bin/expect -f
-#set variables
-set encdir [lrange $argv 0 0]
-set decdir [lrange $argv 1 1]
-set password [lrange $argv 2 2]
-set timeout 10
+#!/bin/bash
 
-spawn encfs --public $encdir $decdir -- -o uid=99 -o gid=100
+encdir=$1
+decdir=$2
+password=$3
 
-# Look for password prompt
-expect "*?assword:*"
-send "$password\r"
-expect eof
+/usr/bin/expect <<EOD
+	#set variables
+	# set encdir [lrange $argv 0 0]
+	# set decdir [lrange $argv 1 1]
+	# set password [lrange $argv 2 2]
+	set timeout 10
+
+	spawn encfs --public $encdir $decdir -- -o uid=99 -o gid=100
+
+	# Look for password prompt
+	expect "*?assword:*"
+	send "$password\r"
+	expect eof
+EOD
+
+exit 0	
 ]]>
 </INLINE>
 </FILE>
