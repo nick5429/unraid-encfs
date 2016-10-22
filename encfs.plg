@@ -1,7 +1,21 @@
 <?xml version='1.0' standalone='yes'?>
-<PLUGIN>
+
+
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "encfs">
+<!ENTITY author    "nick5429">
+<!ENTITY version   "2016.10.21">
+<!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
+]>
+
+
+<PLUGIN  name="&name;"
+         author="&author;"
+         version="&version;"
+         pluginURL="&pluginURL;">
 
 <!--
+2016-10-21 0.2			Updated for unraid 6.1+ plugin system. Working in unraid 6.2.1
 2012-10-03 0.1-beta		Put together an initial version.
 
 DISCLAIMER: This seems to work for me on unraid 5.0-rc6-r8168-test2. I offer this plugin as a convenience and offer no warranty or guarantee.  If you lose all your encrypted data, or if through some failing the data is actually not encrypted after all, or your password gets leaked, I'm sorry, but I claim no responsibility.
@@ -65,20 +79,20 @@ We need boost, rlog, and tcl for encfs itself
 
 We need expect to give the password to encfs
 -->
-<FILE Name="/boot/packages/boost-1.42.0-i486-1.txz" Run="upgradepkg --install-new">
-<URL>http://slackware.cs.utah.edu/pub/slackware/slackware-13.1/slackware/l/boost-1.42.0-i486-1.txz</URL>
+<FILE Name="/boot/packages/boost-1.59.0-x86_64-1.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.cs.utah.edu/pub/slackware/slackware64-14.2/slackware64/l/boost-1.59.0-x86_64-1.txz</URL>
 </FILE>
 
-<FILE Name="/boot/packages/rlog-1.4-i486-5sl.txz" Run="upgradepkg --install-new">
-<URL>http://www.slackware.org.uk/slacky/slackware-13.1/system/rlog/1.4/rlog-1.4-i486-5sl.txz</URL>
+<FILE Name="/boot/packages/rlog-1.4-x86_64-1_slonly.txz" Run="upgradepkg --install-new">
+<URL>http://slackonly.com/pub/packages/14.2-x86_64/libraries/rlog/rlog-1.4-x86_64-1_slonly.txz</URL>
 </FILE>
 
-<FILE Name="/boot/packages/tcl-8.5.8-i486-1.txz" Run="upgradepkg --install-new">
-<URL>http://slackware.mirrors.tds.net/pub/slackware/slackware-13.1/slackware/tcl/tcl-8.5.8-i486-1.txz</URL>
+<FILE Name="/boot/packages/tcl-8.6.5-x86_64-2.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.cs.utah.edu/pub/slackware/slackware64-14.2/slackware64/tcl/tcl-8.6.5-x86_64-2.txz</URL>
 </FILE>
 
-<FILE Name="/boot/packages/expect-5.44.1.11-i486-3.txz" Run="upgradepkg --install-new">
-<URL>http://slackware.cs.utah.edu/pub/slackware/slackware-13.1/slackware/tcl/expect-5.44.1.11-i486-3.txz</URL>
+<FILE Name="/boot/packages/expect-5.45-x86_64-1.txz" Run="upgradepkg --install-new">
+<URL>http://slackware.cs.utah.edu/pub/slackware/slackware64-14.2/slackware64/tcl/expect-5.45-x86_64-1.txz</URL>
 </FILE>
 
 
@@ -88,8 +102,8 @@ We need expect to give the password to encfs
 <!--
 Now we install encfs
 -->
-<FILE Name="/boot/packages/encfs-1.7.4-i486-5sl.txz" Run="upgradepkg --install-new">
-<URL>http://slackware.org.uk/slacky/slackware-14.0/system/encfs/1.7.4/encfs-1.7.4-i486-5sl.txz</URL>
+<FILE Name="/boot/packages/encfs-1.8.1-x86_64-1_slonly.txz" Run="upgradepkg --install-new">
+<URL>http://slackonly.com/pub/packages/14.2-x86_64/system/encfs/encfs-1.8.1-x86_64-1_slonly.txz</URL>
 </FILE>
 
 <!--
@@ -114,7 +128,8 @@ the install script and control script.  This file is in the form of a PHP "ini" 
 <![CDATA[
 # encfs configuration
 SERVICE="disable"
-INSTALLDIR="/usr/local/encfs"
+INSTALLDIR="/usr/local/emhttp/plugins/encfs/"
+SCRIPTDIR="/usr/local/emhttp/plugins/encfs/scripts/"
 ENCDIR0="/mnt/disk1/.encStore/test"
 DECDIR0="/mnt/disk1/decStore/test"
 ]]>
@@ -187,7 +202,7 @@ encfs_mount() {
 	return
   fi  
   
-  CMDLINE="$INSTALLDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
+  CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
   echo -n "mounting encFs on $DECDIR0:  $INSTALLDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
   $CMDLINE
   echo
@@ -290,43 +305,27 @@ esac
 <!-- 
 The page file defines which menu page the plugin will appear on.
 -->
-<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.page">
+<FILE Name="/usr/local/emhttp/plugins/encfs/Encfs.page">
 <INLINE>
 <![CDATA[
-Menu="NetworkServices"
+Menu="OtherSettings"
 Icon="encfs.png"
-Version="0.1-beta"
+Version="0.2"
 Author="nick5429"
 Type="php"
-]]>
-</INLINE>
-</FILE>
-
-<!--
-This is the icon displayed in the webGui. We use a LOCAL element here to specify that the icon
-file may be found and copied from the local file system.  This is the icon file we downloaded
-previously.  The reason we do this is that the unRaid webGui directory is reinitialized upon each
-reboot, and using a LOCAL file is faster and more reliable than re-downloaded every time.
--->
-<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.png">
-<LOCAL>/boot/config/plugins/encfs/encfs.png</LOCAL>
-</FILE>
-
-
-<!--
-Here is the PHP code for the encfs webGui configuration page.  
--->
-<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.php">
-<INLINE>
-<![CDATA[
+---
 <?PHP
 	$logfile = "/var/log/plugins/encfs";
 	$encfs_cfg = parse_ini_file( "/boot/config/plugins/encfs/encfs.cfg");
-	$encfs_running_command = "grep \"" . escapeshellcmd($encfs_cfg['DECDIR0']) . "\" /etc/mtab";
-	$encfs_running_retval = exec_log($encfs_running_command);
-	exec_log("whoami");
 
-	$encfs_running = $encfs_running_retval ? "no" : "yes"; //shell return codes are 0 for success, nonzero for fail
+	$encfs_running = is_mounted(escapeshellcmd($encfs_cfg['DECDIR0'])) ? "no" : "yes"; //shell return codes are 0 for success, nonzero for fail
+
+function is_mounted($dir) {
+	$cmd = "/usr/local/emhttp/plugins/encfs/scripts/is_mounted \"" . $dir . "\" " ;
+	exec_log($cmd);
+	
+}
+
 
 //Logging code taken and modified from the unraid Crashplan plugin. Thanks SeeDrs.
   function exec_log($cmd) {
@@ -461,9 +460,23 @@ function checkINSTALLDIR(form)
 }
 checkINSTALLDIR(document.encfs_settings);
 </script>
+
+
 ]]>
 </INLINE>
 </FILE>
+
+<!--
+This is the icon displayed in the webGui. We use a LOCAL element here to specify that the icon
+file may be found and copied from the local file system.  This is the icon file we downloaded
+previously.  The reason we do this is that the unRaid webGui directory is reinitialized upon each
+reboot, and using a LOCAL file is faster and more reliable than re-downloaded every time.
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/encfs.png">
+<LOCAL>/boot/config/plugins/encfs/encfs.png</LOCAL>
+</FILE>
+
+
 
 <!--
 Here are a couple "event handler" scripts.  These scripts are created in the "event" directory of
@@ -508,9 +521,45 @@ source /boot/config/plugins/encfs/encfs.cfg
 
 
 <!--
+The 'remove' script.
+-->
+<FILE Name="/usr/local/emhttp/plugins/encfs/scripts/is_mounted" Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# return 0 if the string is found in /etc/mtab
+grep "$1" /etc/mtab >> /dev/null
+exit $?
+]]>
+</INLINE>
+</FILE>
+
+<!--
+The 'remove' script.
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+	/etc/rc.d/rc.encfs stop
+	/etc/rc.d/rc.encfs disable
+	
+	rm /boot/packages/boost-1.59.0-x86_64-1.txz
+	rm /boot/packages/rlog-1.4-x86_64-1_slonly.txz
+	rm /boot/packages/tcl-8.6.5-x86_64-2.txz
+	rm /boot/packages/expect-5.45-x86_64-1.txz
+	rm /boot/packages/encfs-1.8.1-x86_64-1_slonly.txz
+	
+	rm /etc/rc.d/rc.encfs
+	
+	removepkg &name;
+	rm -r /usr/local/emhttp/plugins/&name;
+	rm -r /var/log/plugins/&name;
+</INLINE>
+</FILE>
+
+
+<!--
 This is the 'expect' file which deals with the way we have to pass the password to encfs (not via the command line)
 -->
-<FILE Name="/usr/local/encfs/encfsmounter.exp" Mode="0770">
+<FILE Name="/usr/local/emhttp/plugins/encfs/scripts/encfsmounter.exp" Mode="0770">
 <INLINE>
 <![CDATA[
 #!/usr/bin/expect -f
