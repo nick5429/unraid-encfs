@@ -4,7 +4,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "encfs">
 <!ENTITY author    "nick5429">
-<!ENTITY version   "2016.10.21b">
+<!ENTITY version   "2016.10.22m">
 <!ENTITY launch      "Settings/Encfs">
 <!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
 ]>
@@ -217,6 +217,7 @@ encfs_mount() {
   fi  
   
   CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
+  echo -n "Mounting encFS: $CMDLINE        \n"
   # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
   $CMDLINE
   # echo
@@ -241,32 +242,14 @@ write_config() {
 
 encfs_enable() {
   # if not already enabled, enable it
-  echo -n "Working on enabling encfs '$1' '$2' '$3'<br>\n"
+  echo -n "Working on enabling encfs '$1' '$2'<br>\n"
   if [ "$SERVICE" != "enable" ]; then
     SERVICE=enable
-	echo -n "Enabling encfs $1 $2 $3\n"
-	
-    # if different install dir specified, move codebase over there
-    if [ "$1" != "" -a "$1" != "$INSTALLDIR" ]; then
-      if [ -h /usr/local/encfs ]; then
-	    rm /usr/local/encfs
-      fi
-      if [ ! -e "$1" ]; then 
-        mkdir -p "$1"
-      fi
-      echo -n "Moving encfs to $1"
-      mv "$INSTALLDIR"/* "$1"
-      rmdir "$INSTALLDIR"
-      INSTALLDIR="$1"
-      if [ ! -e /usr/local/encfs ]; then
-        ln -s "$INSTALLDIR" /usr/local/encfs
-      fi
-      echo
-    fi
-  fi
+	echo -n "Enabling encfs $1 $2\n"
+  fi	
   
-  ENCDIR0=$2
-  DECDIR0=$3
+  ENCDIR0=$1
+  DECDIR0=$2
 
   write_config
   
@@ -293,16 +276,16 @@ case "$1" in
   encfs_stop
   ;;
 'mount')
-  encfs_mount $2
+  encfs_mount "$2"
   ;;
 'unmount')
-  encfs_unmount $2
+  encfs_unmount "$2"
   ;;  
 'restart')
   encfs_restart
   ;;
 'enable')
-  encfs_enable $2 $3 $4
+  encfs_enable "$2" "$3"
   ;;
 'disable')
   encfs_disable
@@ -324,6 +307,7 @@ The page file defines which menu page the plugin will appear on.
 <INLINE>
 <![CDATA[
 Menu="OtherSettings"
+Title="Encfs"
 Icon="encfs.png"
 Version="0.2"
 Author="nick5429"
@@ -398,20 +382,16 @@ function is_mounted($dir) {
             </select></td>
          </tr>
          <tr>
-         <td>Install directory:</td>
-         <td><input type="text" name="arg2" maxlength="40" value="<?=$encfs_cfg['INSTALLDIR'];?>"></td>
-         </tr>
-         <tr>
          <td>Encrypted backing store directory (no trailing slashes):</td>
-         <td><input type="text" name="arg3" maxlength="100" value="<?=$encfs_cfg['ENCDIR0'];?>"></td>
+         <td><input type="text" name="arg2" maxlength="100" value="<?=$encfs_cfg['ENCDIR0'];?>"></td>
          </tr>		 
          <tr>
          <td>Decrypted mountpoint directory (no trailing slashes):</td>
-         <td><input type="text" name="arg4" maxlength="100" value="<?=$encfs_cfg['DECDIR0'];?>"></td>
+         <td><input type="text" name="arg3" maxlength="100" value="<?=$encfs_cfg['DECDIR0'];?>"></td>
          </tr>		 
          <tr>
          <td></td>
-         <td><input type="submit" name="runCmd" value="Apply"><button type="button" onClick="done();">Done</b>
+         <td><input type="submit" value="Apply"><button type="button" onClick="done();">Done</b>
          </tr>
       </table>
    </form>
@@ -428,7 +408,7 @@ function is_mounted($dir) {
 	<input type="hidden" name="arg1" value="unmount">
 	<input type="hidden" name="arg2" value="<?=$encfs_cfg['DECDIR0'];?>">
 	<td><p class=ContentTitle>encFs volume is mounted on <?=$encfs_cfg['DECDIR0'];?></p></td>
-	<td><input type="submit" name="runCmd" value="Unmount"></td>
+	<td><input type="submit" value="Unmount"></td>
   </tr>	
 <? else: ?>
   <tr>
@@ -441,7 +421,7 @@ function is_mounted($dir) {
 	<td><input type="password" name="arg2" maxlength="1024"></td>
   </tr>  
   <tr>
-	<td><input type="submit" name="runCmd" value="Mount"></td>
+	<td><input type="submit" value="Mount"></td>
 	<td></td>
   </tr>	
 <? endif; ?>
@@ -472,7 +452,6 @@ function checkINSTALLDIR(form)
    
   form.arg2.disabled = (form.arg1.value == "disable");
   form.arg3.disabled = (form.arg1.value == "disable");
-  form.arg4.disabled = (form.arg1.value == "disable");
 
 }
 checkINSTALLDIR(document.encfs_settings);
@@ -583,6 +562,7 @@ decdir=$2
 password=$3
 
 /usr/bin/expect <<EOD
+	log_user 0
 	#set variables
 	# set encdir [lrange $argv 0 0]
 	# set decdir [lrange $argv 1 1]
@@ -595,7 +575,10 @@ password=$3
 	expect "*?assword:*"
 	send "$password\r"
 	expect eof
+	log_user 1
 EOD
+
+# exec 1>&-
 
 exit 0	
 ]]>
