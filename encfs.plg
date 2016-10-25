@@ -4,7 +4,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "encfs">
 <!ENTITY author    "nick5429">
-<!ENTITY version   "2016.10.22m">
+<!ENTITY version   "2016.10.23b">
 <!ENTITY launch      "Settings/Encfs">
 <!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
 ]>
@@ -216,13 +216,18 @@ encfs_mount() {
 	return
   fi  
   
-  CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
-  echo -n "Mounting encFS: $CMDLINE        \n"
-  # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
-  $CMDLINE
-  # echo
-  # echo -n "Returned from expect script. Done.<br>\n"
-  # sleep 5
+  echo "$1" | encfs -S --public "$ENCDIR0" "$DECDIR0"  -- -o uid=99 -o gid=100
+  #echo "Mounting encFS: $CMDLINE        \n"
+  #$CMDLINE
+
+  
+#  CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
+#  echo -n "Mounting encFS: $CMDLINE        \n"
+#  # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
+#  $CMDLINE
+#  # echo
+#  # echo -n "Returned from expect script. Done.<br>\n"
+#  # sleep 5
 }
 
 encfs_restart() {
