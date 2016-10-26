@@ -215,11 +215,11 @@ encfs_mount() {
 	# sleep 5
 	return
   fi  
-  
-  echo "$1" | encfs -S --public "$ENCDIR0" "$DECDIR0"  -- -o uid=99 -o gid=100
-  #echo "Mounting encFS: $CMDLINE        \n"
-  #$CMDLINE
 
+  logger "starting encfs mount"  
+  echo "$1" | encfs -S --public "$ENCDIR0" "$DECDIR0"  -- -o uid=99 -o gid=100 2>&1 | tee /var/log/plugins/encfs_mount_output
+  echo "Mount command done"
+  logger "encfs mount command has returned"
   
 #  CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
 #  echo -n "Mounting encFS: $CMDLINE        \n"
