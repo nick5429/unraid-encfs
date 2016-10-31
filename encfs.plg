@@ -4,7 +4,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "encfs">
 <!ENTITY author    "nick5429">
-<!ENTITY version   "2016.10.22m">
+<!ENTITY version   "2016.10.30c">
 <!ENTITY launch      "Settings/Encfs">
 <!ENTITY pluginURL "https://github.com/nick5429/unraid-encfs/raw/master/encfs.plg">
 ]>
@@ -150,6 +150,8 @@ The Encfs package allows you to create and mount encrypted stores using a FUSE (
 </INLINE>
 </FILE>
 
+
+
 <!--
 Here is another INLINE file that defines the encfs control script.  This script follows the form
 of other control scripts in the /etc/rc.d directory.  Since we will be "executing" this script as a
@@ -217,12 +219,13 @@ encfs_mount() {
   fi  
   
   CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
-  echo -n "Mounting encFS: $CMDLINE        \n"
+  echo "Background mounting encFS: $CMDLINE        \n"
+  echo "$CMDLINE" | at -M NOW >/dev/null 2>&1
   # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
-  $CMDLINE
+  # $CMDLINE
   # echo
   # echo -n "Returned from expect script. Done.<br>\n"
-  # sleep 5
+  sleep 5
 }
 
 encfs_restart() {
@@ -515,7 +518,7 @@ source /boot/config/plugins/encfs/encfs.cfg
 
 
 <!--
-The 'remove' script.
+The 'check is_mounted' script.
 -->
 <FILE Name="/usr/local/emhttp/plugins/encfs/scripts/is_mounted" Run="/bin/bash" Mode="0770">
 <INLINE>
