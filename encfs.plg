@@ -220,12 +220,17 @@ encfs_mount() {
   
   CMDLINE="$SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 $1"
   echo "Background mounting encFS: $CMDLINE        \n"
+  
+  # workaround for stupid unraid bug
   echo "$CMDLINE" | at -M NOW >/dev/null 2>&1
+  
   # echo -n "mounting encFs on $DECDIR0:  $SCRIPTDIR/encfsmounter.exp $ENCDIR0 $DECDIR0 password<br>\n\n"
   # $CMDLINE
   # echo
   # echo -n "Returned from expect script. Done.<br>\n"
-  sleep 5
+  
+  # intentional small wait
+  sleep 2
 }
 
 encfs_restart() {
