@@ -104,8 +104,8 @@ We need expect to give the password to encfs
 <!--
 Now we install encfs
 -->
-<FILE Name="/boot/packages/encfs-1.8.1-x86_64-1_slonly.txz" Run="upgradepkg --install-new">
-<URL>http://slackonly.com/pub/packages/14.2-x86_64/system/encfs/encfs-1.8.1-x86_64-1_slonly.txz</URL>
+<FILE Name="/boot/packages/encfs-1.9.1-x86_64-1cf.txz" Run="upgradepkg --install-new">
+<URL>http://slack.conraid.net/repository/slackware64-current/encfs/encfs-1.9.1-x86_64-1cf.txz</URL>
 </FILE>
 
 <!--
@@ -547,7 +547,7 @@ The 'remove' script.
 	rm /boot/packages/rlog-1.4-x86_64-1_slonly.txz
 	rm /boot/packages/tcl-8.6.5-x86_64-2.txz
 	rm /boot/packages/expect-5.45-x86_64-1.txz
-	rm /boot/packages/encfs-1.8.1-x86_64-1_slonly.txz
+	rm /boot/packages/encfs-1.9.1-x86_64-1cf.txz
 	
 	rm /usr/local/emhttp/plugins/encfs/scripts/rc.encfs
 	
