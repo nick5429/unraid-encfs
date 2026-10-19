@@ -1,0 +1,27 @@
+#!/bin/bash
+# exec-detached COMMAND [ARGS...]
+#
+# Close every file descriptor inherited from the caller except stdin/stdout/stderr,
+# then exec COMMAND. encfs daemonizes after mounting and keeps whatever descriptors
+# it inherited; when the caller is php-fpm that includes the FastCGI connection,
+# which makes the web request hang until the volume is unmounted. Closing them here
+# removes the need for `at`/expect workarounds.
+#
+# fd 255 is bash's own handle on this script; it is close-on-exec already.
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: exec-detached COMMAND [ARGS...]" >&2
+    exit 2
+fi
+
+for fd_path in "/proc/$$/fd/"*; do
+    fd="${fd_path##*/}"
+    case "$fd" in
+        0|1|2|255) continue ;;
+    esac
+    # The descriptor used to list the directory is already closed by now;
+    # closing a descriptor that is not open is harmless.
+    eval "exec ${fd}>&-" 2>/dev/null
+done
+
+exec "$@"

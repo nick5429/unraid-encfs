@@ -1,0 +1,201 @@
+Menu="Utilities"
+Title="EncFS"
+Icon="lock"
+Tag="lock"
+Markdown="false"
+---
+<?php
+/* EncFS plugin settings page. All dynamic content is rendered by javascript/encfs.js
+ * from include/exec.php, so this file only holds the static skeleton and dialogs. */
+$encfsToken = htmlspecialchars((string)($var['csrf_token'] ?? ''), ENT_QUOTES);
+?>
+<link type="text/css" rel="stylesheet" href="<?php autov('/plugins/encfs/styles/encfs.css'); ?>">
+
+<div id="encfs" data-csrf="<?=$encfsToken?>">
+
+<div class="encfs-banner" id="encfs-banner" hidden></div>
+
+<table class="unraid encfs-table">
+<thead>
+<tr>
+<td>Volume</td>
+<td>Encrypted directory</td>
+<td>Mount point</td>
+<td>Status</td>
+<td>Auto-mount</td>
+<td class="encfs-actions-head">Actions</td>
+</tr>
+</thead>
+<tbody id="encfs-rows">
+<tr><td colspan="6" class="encfs-muted">Loading...</td></tr>
+</tbody>
+</table>
+
+<div class="encfs-toolbar">
+<input type="button" id="encfs-add" value="Add volume">
+<input type="button" value="Done" onclick="done()">
+<span class="encfs-version" id="encfs-version"></span>
+</div>
+
+<details class="encfs-log" id="encfs-log">
+<summary>Recent EncFS log</summary>
+<div class="encfs-log-tools"><input type="button" id="encfs-log-refresh" value="Refresh"></div>
+<pre id="encfs-log-text">Loading...</pre>
+</details>
+
+<div class="encfs-notes">
+<p><b>How it works.</b> Each volume pairs an encrypted directory (where encfs keeps the encrypted files and its <code>.encfs6.xml</code> config) with a mount point where the decrypted files appear. Put the mount point inside an exported user share to reach the files over SMB/NFS.</p>
+<p><b>Passwords</b> are sent once to encfs over a pipe and are never written to disk, logs or process lists. Volumes are unmounted automatically when the array stops.</p>
+<p><b>Config backups.</b> Each volume's <code>.encfs6.xml</code> is copied to <code>/boot/config/plugins/encfs/backup/</code>. Without that file the data cannot be decrypted, even with the right password.</p>
+</div>
+
+</div>
+
+<!-- Mount: password prompt -->
+<dialog class="encfs-dialog" id="encfs-mount-dialog">
+<form method="dialog" id="encfs-mount-form" autocomplete="off">
+<h3>Mount <span data-field="name"></span></h3>
+<p class="encfs-paths"><span data-field="encdir"></span> &rarr; <span data-field="mountpoint"></span></p>
+<p class="encfs-warning" data-role="http-warning" hidden>This page is not using HTTPS, so the password crosses the network unencrypted. HTTPS can be enabled under Settings &rsaquo; Management Access.</p>
+<label class="encfs-field">Password
+<span class="encfs-password">
+<input type="password" name="password" autocomplete="off" required>
+<button type="button" class="encfs-reveal" data-role="reveal" title="Show password"><i class="fa fa-eye"></i></button>
+</span>
+</label>
+<p class="encfs-error" data-role="error" hidden></p>
+<div class="encfs-buttons">
+<input type="submit" value="Mount" data-role="submit">
+<input type="button" value="Cancel" data-role="cancel">
+</div>
+</form>
+</dialog>
+
+<!-- Add / edit volume -->
+<dialog class="encfs-dialog encfs-wide" id="encfs-edit-dialog">
+<form method="dialog" id="encfs-edit-form" autocomplete="off">
+<h3 data-role="title">Add volume</h3>
+<input type="hidden" name="original">
+
+<label class="encfs-field">Name
+<input type="text" name="volname" maxlength="32" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,31}">
+<small>Letters, digits, dot, dash, underscore. Used in logs and for the config backup file name.</small>
+</label>
+
+<label class="encfs-field">Encrypted directory
+<input type="text" name="ENCDIR" required placeholder="/mnt/user/encStore/myvolume">
+<small>Holds the encrypted files and normally the <code>.encfs6.xml</code> config. An empty or new directory can be initialized as a new volume after saving.</small>
+</label>
+
+<label class="encfs-field">Mount point
+<input type="text" name="MOUNTPOINT" required placeholder="/mnt/user/decStore/myvolume">
+<small>Where the decrypted files appear. Must be empty; it is created if missing. Inside an exported share it is reachable over SMB.</small>
+</label>
+
+<details class="encfs-advanced">
+<summary>Advanced</summary>
+
+<label class="encfs-field">Config file (optional)
+<input type="text" name="CONFIG" placeholder="default: &lt;encrypted directory&gt;/.encfs6.xml">
+<small>Only for volumes whose <code>.encfs6.xml</code> is kept somewhere else.</small>
+</label>
+
+<div class="encfs-row">
+<label class="encfs-field">Owner UID
+<input type="number" name="UID" min="0" max="65535" value="99">
+</label>
+<label class="encfs-field">Owner GID
+<input type="number" name="GID" min="0" max="65535" value="100">
+</label>
+</div>
+<small class="encfs-help">Ownership shown for every decrypted file. 99/100 (nobody/users) matches Unraid shares.</small>
+
+<div class="encfs-row">
+<label class="encfs-field">Read-only
+<select name="READONLY"><option value="no">No</option><option value="yes">Yes</option></select>
+</label>
+<label class="encfs-field">Idle unmount (minutes)
+<input type="number" name="IDLE" min="0" max="10080" value="0">
+</label>
+</div>
+<small class="encfs-help">Idle unmount: encfs unmounts itself after this many minutes without access. 0 disables it.</small>
+
+<label class="encfs-field">Lock mount point while unmounted
+<select name="LOCK_MOUNTPOINT"><option value="yes">Yes (recommended)</option><option value="no">No</option></select>
+<small>Sets the empty mount point directory to mode 000 so SMB/NFS users cannot store unencrypted files in it while the volume is not mounted. Does not affect the mounted view.</small>
+</label>
+</details>
+
+<label class="encfs-field">Auto-mount when the array starts
+<select name="AUTOMOUNT"><option value="no">No - ask for the password</option><option value="keyfile">Yes - read the password from a file</option></select>
+</label>
+<div data-role="keyfile-block" hidden>
+<label class="encfs-field">Password file
+<input type="text" name="KEYFILE" placeholder="/root/keys/myvolume.key">
+<small>First line is used as the password. Anyone who can read this file can decrypt the volume: keep it off the flash share and the array (e.g. a file fetched into /root at boot), chmod 600.</small>
+</label>
+</div>
+
+<p class="encfs-error" data-role="error" hidden></p>
+<div class="encfs-buttons">
+<input type="submit" value="Save" data-role="submit">
+<input type="button" value="Cancel" data-role="cancel">
+</div>
+</form>
+</dialog>
+
+<!-- Initialize a new volume -->
+<dialog class="encfs-dialog" id="encfs-init-dialog">
+<form method="dialog" id="encfs-init-form" autocomplete="off">
+<h3>Initialize <span data-field="name"></span></h3>
+<p class="encfs-paths">Creates a new encfs volume in <span data-field="encdir"></span> and mounts it at <span data-field="mountpoint"></span>.</p>
+<p class="encfs-warning" data-role="http-warning" hidden>This page is not using HTTPS, so the password crosses the network unencrypted.</p>
+<label class="encfs-field">Configuration
+<select name="mode">
+<option value="standard">Standard - AES-192, unique per-file IVs</option>
+<option value="paranoia">Paranoia - AES-256, per-block MACs, external IV chaining (no hard links, slower)</option>
+</select>
+</label>
+<label class="encfs-field">Password
+<input type="password" name="password" autocomplete="new-password" minlength="8" required>
+</label>
+<label class="encfs-field">Confirm password
+<input type="password" name="confirm" autocomplete="new-password" minlength="8" required>
+</label>
+<label class="encfs-check"><input type="checkbox" name="ack" required> I understand the data cannot be recovered without this password and the volume's .encfs6.xml file.</label>
+<p class="encfs-error" data-role="error" hidden></p>
+<div class="encfs-buttons">
+<input type="submit" value="Initialize" data-role="submit">
+<input type="button" value="Cancel" data-role="cancel">
+</div>
+</form>
+</dialog>
+
+<!-- Volume details -->
+<dialog class="encfs-dialog encfs-wide" id="encfs-info-dialog">
+<form method="dialog">
+<h3>Volume <span data-field="name"></span></h3>
+<table class="encfs-kv" data-role="kv"></table>
+<pre class="encfs-pre" data-role="details"></pre>
+<p class="encfs-error" data-role="error" hidden></p>
+<div class="encfs-buttons">
+<input type="button" value="Back up config now" data-role="backup">
+<input type="button" value="Close" data-role="cancel">
+</div>
+</form>
+</dialog>
+
+<!-- Generic message / confirmation -->
+<dialog class="encfs-dialog" id="encfs-message-dialog">
+<form method="dialog">
+<h3 data-role="title"></h3>
+<p class="encfs-message" data-role="message"></p>
+<pre class="encfs-pre" data-role="details" hidden></pre>
+<div class="encfs-buttons">
+<input type="button" data-role="confirm" hidden>
+<input type="button" value="Close" data-role="cancel">
+</div>
+</form>
+</dialog>
+
+<script src="<?php autov('/plugins/encfs/javascript/encfs.js'); ?>"></script>

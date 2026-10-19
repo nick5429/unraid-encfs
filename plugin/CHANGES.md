@@ -1,0 +1,13 @@
+### 2026.10.19
+- Complete rewrite for Unraid 7
+- Bundles a statically linked encfs 1.9.5 (no boost/rlog/tcl/expect packages needed)
+- Multiple volumes, managed from Settings > User Utilities > EncFS
+- Password goes straight to encfs over a pipe: never on a command line, in a file or in a log; wrong passwords are reported in the dialog
+- Optional auto-mount at array start from a password file
+- Volumes are unmounted when the array stops, with escalation so a busy volume cannot hang the array stop
+- Detects stale mounts ("Transport endpoint is not connected") and offers a forced cleanup
+- Initialize new volumes (standard or paranoia) from the webGUI
+- Backs up each volume's .encfs6.xml to the flash drive
+- Optional lock (mode 000) on the empty mount point so nothing is written unencrypted while unmounted
+- encfs-mgr command line tool
+- Imports the volume from the 2016 plugin configuration

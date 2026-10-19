@@ -1,0 +1,128 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name        "encfs">
+<!ENTITY author      "nick5429">
+<!ENTITY version     "@VERSION@">
+<!ENTITY launch      "Settings/EncFS">
+<!ENTITY github      "nick5429/unraid-encfs">
+<!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/master/encfs.plg">
+<!ENTITY pluginLOC   "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
+<!ENTITY pluginPKG   "@PLUGIN_PKG@">
+<!ENTITY pkgBase     "https://raw.githubusercontent.com/&github;/master/packages">
+<!ENTITY pluginURLd  "&pkgBase;/&pluginPKG;">
+<!ENTITY pluginSHA   "@PLUGIN_SHA256@">
+<!ENTITY encfsPKG    "@ENCFS_PKG@">
+<!ENTITY encfsURLd   "&pkgBase;/&encfsPKG;">
+<!ENTITY encfsSHA    "@ENCFS_SHA256@">
+]>
+
+<PLUGIN  name="&name;"
+         author="&author;"
+         version="&version;"
+         launch="&launch;"
+         pluginURL="&pluginURL;"
+         icon="lock"
+         min="7.0.0"
+         support="https://github.com/&github;/issues"
+         project="https://github.com/&github;"
+         readme="https://github.com/&github;#readme">
+
+<CHANGES>
+@CHANGES@
+</CHANGES>
+
+<!--
+Pre-install: tidy the flash cache and remove leftovers of the 2016 plugin.
+The 2016 plugin wrote its files directly into &emhttpLOC; (not from a package),
+so if no encfs-plugin package is installed yet, anything in that directory is legacy.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+mkdir -p &pluginLOC;
+
+for cached in &pluginLOC;/encfs-plugin-*.txz &pluginLOC;/encfs-static-*.txz; do
+    [ -e "$cached" ] || continue
+    case "$(basename "$cached")" in
+        &pluginPKG;|&encfsPKG;) ;;
+        *) rm -f "$cached" ;;
+    esac
+done
+
+if ! ls /var/log/packages/encfs-plugin-* >/dev/null 2>&amp;1; then
+    rm -rf &emhttpLOC;
+fi
+rm -f &pluginLOC;/encfs.png
+
+for extra in /boot/extra/encfs-*.t?z /boot/extra/rlog-*.t?z; do
+    [ -e "$extra" ] || continue
+    echo "Note: $extra is installed at every boot. This plugin brings its own static"
+    echo "      encfs in /usr/local/bin and does not need it; consider deleting it."
+done
+exit 0
+</INLINE>
+</FILE>
+
+<!-- Statically linked encfs/encfsctl 1.9.5 (no runtime library dependencies) -->
+<FILE Name="&pluginLOC;/&encfsPKG;" Run="upgradepkg --install-new --reinstall">
+<URL>&encfsURLd;</URL>
+<SHA256>&encfsSHA;</SHA256>
+</FILE>
+
+<!-- webGUI page, event handlers, encfs-mgr CLI -->
+<FILE Name="&pluginLOC;/&pluginPKG;" Run="upgradepkg --install-new --reinstall">
+<URL>&pluginURLd;</URL>
+<SHA256>&pluginSHA;</SHA256>
+</FILE>
+
+<!-- Post-install: import the 2016 configuration once and verify the binary -->
+<FILE Run="/bin/bash">
+<INLINE>
+/usr/local/sbin/encfs-mgr migrate-legacy || true
+
+if ! /usr/local/bin/encfs --version >/dev/null 2>&amp;1; then
+    echo "WARNING: /usr/local/bin/encfs did not run; the plugin will not be able to mount volumes."
+fi
+
+echo ""
+echo "----------------------------------------------------------------"
+echo " EncFS &version; installed ($(/usr/local/bin/encfs --version 2>&amp;1))"
+echo " Manage volumes under Settings > User Utilities > EncFS"
+echo " Command line: encfs-mgr --help"
+echo "----------------------------------------------------------------"
+echo ""
+exit 0
+</INLINE>
+</FILE>
+
+<!--
+Removal: unmount what can be unmounted cleanly (busy volumes are left mounted and
+reported), remove both packages and the cached copies. volumes.cfg and the config
+backups in &pluginLOC; are kept on purpose.
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+if [ -x /usr/local/sbin/encfs-mgr ]; then
+    if ! /usr/local/sbin/encfs-mgr unmount-all --reason "plugin removal"; then
+        echo "WARNING: some EncFS volumes are busy and were left mounted."
+        echo "         Unmount them later with: umount MOUNTPOINT"
+    fi
+fi
+
+removepkg encfs-plugin >/dev/null 2>&amp;1
+removepkg encfs-static >/dev/null 2>&amp;1
+rm -f &pluginLOC;/encfs-plugin-*.txz &pluginLOC;/encfs-static-*.txz
+rm -rf &emhttpLOC;
+rm -f /var/run/encfs-plugin.lock
+
+echo ""
+echo "----------------------------------------------------------------"
+echo " EncFS plugin removed."
+echo " Volume settings and config backups remain in &pluginLOC;"
+echo "----------------------------------------------------------------"
+echo ""
+exit 0
+</INLINE>
+</FILE>
+
+</PLUGIN>

@@ -1,0 +1,9 @@
+#!/bin/bash
+# Array disks and user shares are mounted. This runs before Docker and VMs start,
+# so auto-mounted volumes are in place before any container bind-mounts their path.
+#
+# 1. Refresh the flash copies of each volume's encfs config (no-op when unchanged).
+# 2. Mount the volumes that are configured with a password file.
+/usr/local/sbin/encfs-mgr backup-all >/dev/null 2>&1
+/usr/local/sbin/encfs-mgr automount >/dev/null 2>&1
+exit 0

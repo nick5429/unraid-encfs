@@ -1,0 +1,6 @@
+#!/bin/bash
+# Disks are about to be unmounted; VMs, Docker and network services are already
+# stopped. Any EncFS mount still holding the array busy is unmounted here, with
+# escalation (lazy unmount, then stopping encfs) so the array stop cannot hang.
+/usr/local/sbin/encfs-mgr unmount-all --force --reason "array stop" 2>&1 | logger -t encfs-plugin
+exit 0

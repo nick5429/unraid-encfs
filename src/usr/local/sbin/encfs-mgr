@@ -1,0 +1,260 @@
+#!/usr/bin/php
+<?php
+/*
+ * encfs-mgr - command line front end for the Unraid EncFS plugin.
+ *
+ *   encfs-mgr list
+ *   encfs-mgr mount NAME [--stdin | --password-file FILE]
+ *   encfs-mgr unmount NAME [--force]
+ *   encfs-mgr unmount-all [--force] [--reason TEXT]
+ *   encfs-mgr automount
+ *   encfs-mgr info NAME
+ *   encfs-mgr backup NAME
+ *   encfs-mgr backup-all
+ *   encfs-mgr migrate-legacy
+ *
+ * Without --stdin or --password-file, mount prompts on the terminal with echo off.
+ */
+
+$pluginRoot = getenv('ENCFS_PLUGIN_ROOT') ?: '/usr/local/emhttp/plugins/encfs';
+require_once $pluginRoot . '/include/Encfs.php';
+
+function usage(int $exitCode): void
+{
+    $text = <<<TXT
+Usage: encfs-mgr COMMAND [ARGS]
+
+  list                                  Show configured volumes and their state
+  mount NAME [--stdin|--password-file FILE]
+                                        Mount a volume (prompts for the password by default)
+  unmount NAME [--force]                Unmount a volume (--force: lazy unmount + stop encfs)
+  unmount-all [--force] [--reason TEXT] Unmount every EncFS mount under /mnt
+  automount                             Mount volumes configured with a password file
+  info NAME                             Show encfsctl info for a volume
+  backup NAME                           Copy the volume's encfs config to the flash drive
+  backup-all                            Same, for every volume
+  migrate-legacy                        Import the volume from the 2016 plugin config
+
+TXT;
+    fwrite($exitCode === 0 ? STDOUT : STDERR, $text);
+    exit($exitCode);
+}
+
+/** Read a password from the terminal with echo disabled. */
+function promptPassword(string $name): string
+{
+    $tty = @fopen('/dev/tty', 'r+');
+    if ($tty === false) {
+        throw new EncfsError('No terminal available; use --stdin or --password-file');
+    }
+
+    fwrite($tty, "Password for '$name': ");
+    shell_exec('stty -echo < /dev/tty 2>/dev/null');
+    register_shutdown_function(function () {
+        shell_exec('stty echo < /dev/tty 2>/dev/null');
+    });
+
+    $line = fgets($tty);
+    shell_exec('stty echo < /dev/tty 2>/dev/null');
+    fwrite($tty, "\n");
+    fclose($tty);
+
+    return rtrim((string)$line, "\r\n");
+}
+
+function readStdinPassword(): string
+{
+    $line = fgets(STDIN);
+    return rtrim((string)$line, "\r\n");
+}
+
+/** Pull "--flag" and "--flag VALUE" options out of $args. */
+function takeFlag(array &$args, string $flag): bool
+{
+    $index = array_search($flag, $args, true);
+    if ($index === false) {
+        return false;
+    }
+    array_splice($args, $index, 1);
+    return true;
+}
+
+function takeOption(array &$args, string $flag): ?string
+{
+    $index = array_search($flag, $args, true);
+    if ($index === false) {
+        return null;
+    }
+    if (!isset($args[$index + 1])) {
+        throw new EncfsError("$flag needs a value");
+    }
+    $value = $args[$index + 1];
+    array_splice($args, $index, 2);
+    return $value;
+}
+
+function stateLabel(array $status): string
+{
+    $labels = [
+        'mounted'       => 'mounted',
+        'unmounted'     => 'not mounted',
+        'stale'         => 'STALE (encfs process gone)',
+        'foreign'       => 'other filesystem mounted there',
+        'missing'       => 'encrypted directory missing',
+        'uninitialized' => 'not initialized (empty directory)',
+        'noconfig'      => 'NO encfs config found',
+    ];
+    $label = $labels[$status['state']] ?? $status['state'];
+    if ($status['state'] === 'mounted' && $status['readonly']) {
+        $label .= ' (read-only)';
+    }
+    if ($status['pid'] > 0) {
+        $label .= ', pid ' . $status['pid'];
+    }
+    return $label;
+}
+
+function cmdList(): int
+{
+    $volumes = Encfs::loadVolumes();
+    if (count($volumes) === 0) {
+        echo "No volumes configured. Add one under Settings > EncFS.\n";
+        return 0;
+    }
+    foreach ($volumes as $name => $volume) {
+        $status = Encfs::volumeStatus($name, $volume);
+        echo "$name\n";
+        echo "  encrypted:  {$volume['ENCDIR']}\n";
+        echo "  mount at:   {$volume['MOUNTPOINT']}\n";
+        echo "  state:      " . stateLabel($status) . "\n";
+        echo "  auto-mount: " . ($volume['AUTOMOUNT'] === 'keyfile' ? "password file {$volume['KEYFILE']}" : 'no') . "\n";
+    }
+    return 0;
+}
+
+function main(array $argv): int
+{
+    if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+        fwrite(STDERR, "encfs-mgr must be run as root\n");
+        return 1;
+    }
+
+    $args = array_slice($argv, 1);
+    if (count($args) === 0 || in_array($args[0], ['-h', '--help', 'help'], true)) {
+        usage(count($args) === 0 ? 1 : 0);
+    }
+    $command = array_shift($args);
+
+    switch ($command) {
+        case 'list':
+            return cmdList();
+
+        case 'mount':
+            $useStdin = takeFlag($args, '--stdin');
+            $passwordFile = takeOption($args, '--password-file');
+            if (count($args) !== 1) {
+                usage(1);
+            }
+            $name = $args[0];
+            Encfs::getVolume($name);
+            if ($passwordFile !== null) {
+                $password = Encfs::readPasswordFile($passwordFile);
+            } elseif ($useStdin) {
+                $password = readStdinPassword();
+            } else {
+                $password = promptPassword($name);
+            }
+            Encfs::mount($name, $password, 'CLI');
+            echo "Mounted '$name' at " . Encfs::getVolume($name)['MOUNTPOINT'] . "\n";
+            return 0;
+
+        case 'unmount':
+        case 'umount':
+            $force = takeFlag($args, '--force');
+            if (count($args) !== 1) {
+                usage(1);
+            }
+            Encfs::unmount($args[0], $force, 'CLI');
+            echo "Unmounted '{$args[0]}'\n";
+            return 0;
+
+        case 'unmount-all':
+            $force = takeFlag($args, '--force');
+            $reason = takeOption($args, '--reason') ?? 'CLI';
+            $results = Encfs::unmountAll($force, $reason);
+            $failed = 0;
+            foreach ($results as $mountpoint => $error) {
+                if ($error === null) {
+                    echo "unmounted $mountpoint\n";
+                } else {
+                    $failed++;
+                    fwrite(STDERR, "FAILED $mountpoint: $error\n");
+                }
+            }
+            if ($failed > 0 && $reason !== 'CLI') {
+                Encfs::notify('EncFS unmount failed', "$failed EncFS mount(s) could not be unmounted ($reason). See the syslog.", 'alert');
+            }
+            return $failed > 0 ? 1 : 0;
+
+        case 'automount':
+            $results = Encfs::automount();
+            $failed = 0;
+            foreach ($results as $name => $error) {
+                if ($error === null) {
+                    echo "$name: mounted\n";
+                } else {
+                    $failed++;
+                    fwrite(STDERR, "$name: $error\n");
+                }
+            }
+            return $failed > 0 ? 1 : 0;
+
+        case 'info':
+            if (count($args) !== 1) {
+                usage(1);
+            }
+            $info = Encfs::info($args[0]);
+            echo "volume:  {$info['name']}\n";
+            echo "state:   " . stateLabel($info['status']) . "\n";
+            echo "config:  " . ($info['configFile'] !== '' ? $info['configFile'] : '(none)') . "\n";
+            $backup = $info['status']['backup'];
+            echo "backup:  " . ($backup ? $backup['file'] . ' (' . date('Y-m-d H:i', $backup['mtime']) . ')' : '(none)') . "\n\n";
+            echo $info['details'] . "\n";
+            return 0;
+
+        case 'backup':
+            if (count($args) !== 1) {
+                usage(1);
+            }
+            $target = Encfs::backupConfig($args[0], Encfs::getVolume($args[0]));
+            if ($target === null) {
+                throw new EncfsError('No config file found to back up');
+            }
+            echo "Config backed up to $target\n";
+            return 0;
+
+        case 'backup-all':
+            foreach (Encfs::backupAll() as $name => $target) {
+                echo $name . ': ' . ($target !== null ? $target : 'no config found') . "\n";
+            }
+            return 0;
+
+        case 'migrate-legacy':
+            $imported = Encfs::migrateLegacy();
+            if ($imported !== null) {
+                echo "Imported legacy volume as '$imported'\n";
+            }
+            return 0;
+
+        default:
+            usage(1);
+    }
+    return 1;
+}
+
+try {
+    exit(main($argv));
+} catch (EncfsError $e) {
+    fwrite(STDERR, 'encfs-mgr: ' . $e->getMessage() . "\n");
+    exit(1);
+}

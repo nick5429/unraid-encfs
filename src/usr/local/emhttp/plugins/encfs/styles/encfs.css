@@ -1,0 +1,312 @@
+/* EncFS plugin. Colors come from the Unraid 7 theme variables, with fallbacks. */
+
+#encfs {
+    --encfs-text: var(--text-color, #1c1b1b);
+    --encfs-muted: var(--alt-text-color, #808080);
+    --encfs-bg: var(--background-color, #f2f2f2);
+    --encfs-panel: var(--mild-background-color, #e8e8e8);
+    --encfs-border: var(--border-color, #cccccc);
+    --encfs-accent: var(--brand-orange, #ff8c2f);
+    --encfs-ok: var(--green-800, #4f8a10);
+    --encfs-bad: var(--red-800, #e22828);
+    --encfs-warn: var(--orange-300, #e68a00);
+    --encfs-info: var(--blue-800, #486dba);
+}
+
+.encfs-table td {
+    vertical-align: middle;
+}
+
+.encfs-table td.encfs-path {
+    font-family: var(--font-bitstream, monospace);
+    font-size: 0.95em;
+    word-break: break-all;
+}
+
+.encfs-table td.encfs-actions,
+.encfs-table td.encfs-actions-head {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.encfs-table td.encfs-actions input[type=button] {
+    margin: 2px 0 2px 4px;
+    min-width: 0;
+    padding: 4px 10px;
+}
+
+.encfs-muted {
+    color: var(--encfs-muted);
+}
+
+.encfs-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.encfs-status::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+}
+
+.encfs-status.ok   { color: var(--encfs-ok); }
+.encfs-status.idle { color: var(--encfs-muted); }
+.encfs-status.warn { color: var(--encfs-warn); }
+.encfs-status.bad  { color: var(--encfs-bad); }
+.encfs-status.info { color: var(--encfs-info); }
+
+.encfs-substatus {
+    display: block;
+    font-size: 0.85em;
+    color: var(--encfs-muted);
+    margin-top: 2px;
+}
+
+.encfs-banner {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-left: 4px solid var(--encfs-warn);
+    background: var(--encfs-panel);
+}
+
+.encfs-toolbar {
+    margin: 12px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.encfs-version {
+    margin-left: auto;
+    color: var(--encfs-muted);
+    font-size: 0.9em;
+}
+
+.encfs-log summary,
+.encfs-advanced summary {
+    cursor: pointer;
+    user-select: none;
+}
+
+.encfs-log pre,
+.encfs-pre {
+    max-height: 320px;
+    overflow: auto;
+    padding: 8px;
+    background: var(--encfs-panel);
+    color: var(--encfs-text);
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.encfs-log-tools {
+    margin: 6px 0;
+}
+
+.encfs-notes {
+    margin-top: 16px;
+    max-width: 900px;
+    color: var(--encfs-muted);
+    font-size: 0.9em;
+}
+
+.encfs-notes b {
+    color: var(--encfs-text);
+}
+
+/* Dialogs (native <dialog>) */
+
+.encfs-dialog {
+    width: min(520px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    padding: 20px 24px;
+    border: 1px solid var(--border-color, #cccccc);
+    border-radius: 6px;
+    background: var(--background-color, #ffffff);
+    color: var(--text-color, #1c1b1b);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.encfs-dialog.encfs-wide {
+    width: min(720px, calc(100vw - 32px));
+}
+
+.encfs-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.encfs-dialog h3 {
+    margin: 0 0 10px;
+    font-size: 1.3em;
+}
+
+.encfs-dialog .encfs-paths {
+    margin: 0 0 12px;
+    font-family: var(--font-bitstream, monospace);
+    font-size: 0.9em;
+    word-break: break-all;
+    color: var(--alt-text-color, #808080);
+}
+
+.encfs-field {
+    display: block;
+    margin: 10px 0;
+    font-weight: bold;
+}
+
+.encfs-field input[type=text],
+.encfs-field input[type=password],
+.encfs-field input[type=number],
+.encfs-field select {
+    display: block;
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+    margin-top: 4px;
+    font-weight: normal;
+}
+
+.encfs-field small,
+.encfs-help {
+    display: block;
+    margin-top: 3px;
+    font-weight: normal;
+    font-size: 0.85em;
+    color: var(--alt-text-color, #808080);
+}
+
+.encfs-row {
+    display: flex;
+    gap: 16px;
+}
+
+.encfs-row > .encfs-field {
+    flex: 1;
+}
+
+.encfs-advanced {
+    margin: 12px 0;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color, #cccccc);
+    border-radius: 4px;
+}
+
+.encfs-check {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 12px 0;
+}
+
+.encfs-password {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.encfs-password input {
+    flex: 1;
+    margin-top: 0 !important;
+}
+
+.encfs-reveal {
+    align-self: center;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 10px;
+}
+
+.encfs-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 16px;
+}
+
+.encfs-buttons input {
+    margin: 0;
+}
+
+.encfs-error {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border-left: 4px solid var(--red-800, #e22828);
+    background: var(--mild-background-color, #f2f2f2);
+    white-space: pre-wrap;
+}
+
+.encfs-warning {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-left: 4px solid var(--orange-300, #e68a00);
+    background: var(--mild-background-color, #f2f2f2);
+    font-size: 0.9em;
+}
+
+.encfs-message {
+    white-space: pre-wrap;
+}
+
+.encfs-kv {
+    width: 100%;
+    margin-bottom: 10px;
+    border-collapse: collapse;
+}
+
+.encfs-kv td {
+    padding: 3px 8px 3px 0;
+    vertical-align: top;
+    border: none;
+}
+
+.encfs-kv td:first-child {
+    width: 34%;
+    color: var(--alt-text-color, #808080);
+    white-space: nowrap;
+}
+
+.encfs-kv td:last-child {
+    word-break: break-all;
+}
+
+.encfs-busy {
+    cursor: progress;
+    opacity: 0.7;
+}
+
+@media (max-width: 760px) {
+    .encfs-table thead {
+        display: none;
+    }
+    .encfs-table tr,
+    .encfs-table td {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .encfs-table td.encfs-actions {
+        text-align: left;
+    }
+    .encfs-table td[data-label]:not(.encfs-name)::before {
+        content: attr(data-label) ": ";
+        color: var(--encfs-muted);
+        font-family: var(--font-sans, sans-serif);
+    }
+    .encfs-table td.encfs-name {
+        font-weight: bold;
+    }
+    .encfs-row {
+        flex-direction: column;
+        gap: 0;
+    }
+}

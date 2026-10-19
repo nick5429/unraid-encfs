@@ -1,0 +1,62 @@
+# To enable: copy to .github/workflows/ci.yml (needs a token with the `workflow` scope, or add it via the GitHub web UI).
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      build_encfs:
+        description: "Also build the static encfs package (slow)"
+        type: boolean
+        default: false
+
+jobs:
+  lint-and-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq php-cli shellcheck libxml2-utils xz-utils
+
+      - name: Lint PHP
+        run: |
+          find src -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l src/usr/local/sbin/encfs-mgr
+
+      - name: Lint JavaScript
+        run: node --check src/usr/local/emhttp/plugins/encfs/javascript/encfs.js
+
+      - name: Shellcheck
+        run: |
+          shellcheck -x build/*.sh tests/integration.sh \
+            src/usr/local/emhttp/plugins/encfs/event/* \
+            src/usr/local/emhttp/plugins/encfs/scripts/exec-detached
+          mkdir -p /tmp/plg
+          php tests/check-plg-scripts.php encfs.plg /tmp/plg | xargs shellcheck
+
+      - name: Validate encfs.plg
+        run: xmllint --noout --noent encfs.plg
+
+      - name: Build static encfs
+        if: github.event_name == 'workflow_dispatch' && inputs.build_encfs
+        run: sudo build/build-encfs-static.sh
+
+      - name: Build plugin package (hashes will differ from the committed plg)
+        run: |
+          cp encfs.plg /tmp/encfs.plg.committed
+          cp -a packages /tmp/packages.committed
+          build/build-plugin.sh "$(grep -oP '<!ENTITY version\s+"\K[^"]+' encfs.plg)"
+          cp /tmp/encfs.plg.committed encfs.plg
+          rm -rf packages && mv /tmp/packages.committed packages
+
+      - name: Integration tests (real FUSE mounts)
+        run: |
+          sudo tar -C / -xJf packages/encfs-static-1.9.5-x86_64-1.txz usr/local/bin
+          sudo tests/integration.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: packages/*.txz
