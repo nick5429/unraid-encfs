@@ -2,16 +2,16 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name        "encfs">
 <!ENTITY author      "nick5429">
-<!ENTITY version     "2026.10.19">
+<!ENTITY version     "2026.10.19a">
 <!ENTITY launch      "Settings/EncFS">
 <!ENTITY github      "nick5429/unraid-encfs">
 <!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/master/encfs.plg">
 <!ENTITY pluginLOC   "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
-<!ENTITY pluginPKG   "encfs-plugin-2026.10.19-noarch-1.txz">
+<!ENTITY pluginPKG   "encfs-plugin-2026.10.19a-noarch-1.txz">
 <!ENTITY pkgBase     "https://raw.githubusercontent.com/&github;/master/packages">
 <!ENTITY pluginURLd  "&pkgBase;/&pluginPKG;">
-<!ENTITY pluginSHA   "286d9295f7bfd5547c1d64b8ae284fe587afbcb05be3c43280334ef0e4eb6748">
+<!ENTITY pluginSHA   "a1cf202335bae6c2793f78b4d74e748309521b7a24744d101380e8315fefe03e">
 <!ENTITY encfsPKG    "encfs-static-1.9.5-x86_64-1.txz">
 <!ENTITY encfsURLd   "&pkgBase;/&encfsPKG;">
 <!ENTITY encfsSHA    "fb3155f25687391e92e18b46c595453244079593ba7ac63f38612e69dae1c83e">
@@ -29,6 +29,11 @@
          readme="https://github.com/&github;#readme">
 
 <CHANGES>
+### 2026.10.19a
+- Fix: Save/Mount could hang on "Saving..." - the page now posts URL-encoded requests like the rest of the webGUI (multipart bodies stall before reaching PHP on Unraid 7.3.2)
+- Requests now time out with an error message instead of waiting indefinitely
+- Status checks no longer stat a path that is already mounted
+
 ### 2026.10.19
 - Complete rewrite for Unraid 7
 - Bundles a statically linked encfs 1.9.5 (no boost/rlog/tcl/expect packages needed)

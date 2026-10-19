@@ -617,7 +617,7 @@ class Encfs
             $state = 'noconfig';
         }
 
-        $mountpointExists = is_dir($volume['MOUNTPOINT']);
+        $mountpointExists = $mount['mounted'] ? true : is_dir($volume['MOUNTPOINT']);
         $mountpointEmpty = !$mount['mounted'] && $mountpointExists ? self::isEmptyDir($volume['MOUNTPOINT']) : null;
         $locked = null;
         if (!$mount['mounted'] && $mountpointExists) {
@@ -728,7 +728,8 @@ class Encfs
             return;
         }
         $mountpoint = $volume['MOUNTPOINT'];
-        if (!is_dir($mountpoint) || self::mountState($mountpoint)['mounted']) {
+        // Check the mount table first: stat() on a mounted path goes to encfs.
+        if (self::mountState($mountpoint)['mounted'] || !is_dir($mountpoint)) {
             return;
         }
         if ((fileperms($mountpoint) & 0777) !== 0) {

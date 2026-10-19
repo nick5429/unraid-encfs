@@ -1,3 +1,8 @@
+### 2026.10.19a
+- Fix: Save/Mount could hang on "Saving..." - the page now posts URL-encoded requests like the rest of the webGUI (multipart bodies stall before reaching PHP on Unraid 7.3.2)
+- Requests now time out with an error message instead of waiting indefinitely
+- Status checks no longer stat a path that is already mounted
+
 ### 2026.10.19
 - Complete rewrite for Unraid 7
 - Bundles a statically linked encfs 1.9.5 (no boost/rlog/tcl/expect packages needed)

@@ -46,27 +46,55 @@
         });
     }
 
+    // Mount/initialize can spend up to 90 s in encfs (server-side limit) and a forced
+    // unmount escalates for several seconds; everything else should answer at once.
+    var SLOW_ACTIONS = ['mount', 'initialize', 'unmount'];
+    var FAST_TIMEOUT_MS = 30000;
+    var SLOW_TIMEOUT_MS = 150000;
+
+    /** fetch() that rejects with a readable error instead of waiting forever. */
+    function fetchWithTimeout(url, options, timeoutMs) {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+        options.signal = controller.signal;
+        return fetch(url, options)
+            .catch(function (err) {
+                if (err && err.name === 'AbortError') {
+                    throw new Error('No response from the server after ' + Math.round(timeoutMs / 1000) +
+                                    ' seconds. Check the Recent EncFS log, then reload the page.');
+                }
+                throw err;
+            })
+            .finally(function () { clearTimeout(timer); });
+    }
+
     function apiGet(action, params) {
         var query = new URLSearchParams(params || {});
         query.set('action', action);
-        return fetch(ENDPOINT + '?' + query.toString(), {
+        return fetchWithTimeout(ENDPOINT + '?' + query.toString(), {
             credentials: 'same-origin',
             cache: 'no-store'
-        }).then(parseResponse);
+        }, FAST_TIMEOUT_MS).then(parseResponse);
     }
 
+    /*
+     * POST bodies are sent URL-encoded, like the rest of the Unraid webGUI.
+     * multipart/form-data (a FormData body) stalls before reaching PHP on
+     * Unraid 7.3.2, so it must not be used here.
+     */
     function apiPost(action, fields) {
-        var body = new FormData();
+        var body = new URLSearchParams();
         body.append('action', action);
         body.append('csrf_token', csrfToken());
         Object.keys(fields || {}).forEach(function (key) {
             body.append(key, fields[key]);
         });
-        return fetch(ENDPOINT, {
+        var timeoutMs = SLOW_ACTIONS.indexOf(action) !== -1 ? SLOW_TIMEOUT_MS : FAST_TIMEOUT_MS;
+        return fetchWithTimeout(ENDPOINT, {
             method: 'POST',
             credentials: 'same-origin',
             body: body
-        }).then(parseResponse);
+        }, timeoutMs).then(parseResponse);
     }
 
     /* ------------------------------------------------------------ */
