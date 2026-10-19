@@ -497,8 +497,9 @@ class Encfs
 
     public static function isMountpoint(string $path): bool
     {
+        $canonical = self::canonicalMountpoint($path);
         foreach (self::readMounts() as $mount) {
-            if ($mount['mountpoint'] === $path) {
+            if ($mount['mountpoint'] === $path || $mount['mountpoint'] === $canonical) {
                 return true;
             }
         }
@@ -506,8 +507,30 @@ class Encfs
     }
 
     /** Find the encfs daemon serving $mountpoint, or 0. */
+    /**
+     * The path the kernel records for a mount on $path.
+     * Symlinks in the parent directories are resolved (an Unraid exclusive share
+     * makes /mnt/user/<share> a symlink to /mnt/<pool>/<share>, and the mount table
+     * then lists the pool path). The last component is not resolved, so this never
+     * stats the mount point itself.
+     */
+    public static function canonicalMountpoint(string $path): string
+    {
+        $path = rtrim($path, '/');
+        if ($path === '' || $path[0] !== '/') {
+            return $path;
+        }
+        $parent = realpath(dirname($path));
+        if ($parent === false) {
+            return $path;
+        }
+        return rtrim($parent, '/') . '/' . basename($path);
+    }
+
+    /** Find the encfs daemon serving $mountpoint, or 0. */
     public static function findEncfsPid(string $mountpoint): int
     {
+        $target = self::canonicalMountpoint($mountpoint);
         foreach (glob('/proc/[0-9]*/cmdline') as $cmdlineFile) {
             $raw = @file_get_contents($cmdlineFile);
             if ($raw === false || $raw === '') {
@@ -517,9 +540,13 @@ class Encfs
             if (basename($args[0]) !== 'encfs') {
                 continue;
             }
-            // Compare without trailing slashes so hand-typed "dir/" still matches.
             foreach (array_slice($args, 1) as $arg) {
-                if ($arg !== '/' && rtrim($arg, '/') === $mountpoint) {
+                if ($arg === '' || $arg[0] !== '/' || $arg === '/') {
+                    continue;
+                }
+                // encfs keeps the path as typed; compare both as typed and resolved.
+                $arg = rtrim($arg, '/');
+                if ($arg === $mountpoint || $arg === $target || self::canonicalMountpoint($arg) === $target) {
                     return (int)basename(dirname($cmdlineFile));
                 }
             }
@@ -543,8 +570,9 @@ class Encfs
             'device'   => '',
         ];
 
+        $canonical = self::canonicalMountpoint($mountpoint);
         foreach (self::readMounts() as $mount) {
-            if ($mount['mountpoint'] !== $mountpoint) {
+            if ($mount['mountpoint'] !== $mountpoint && $mount['mountpoint'] !== $canonical) {
                 continue;
             }
             // The last entry for a path is the one on top.
@@ -882,10 +910,15 @@ class Encfs
             $args = self::buildEncfsArgs($name, $volume);
             [$code, $stdout, $stderr] = self::run($args, $password . "\n", self::MOUNT_TIMEOUT_SECONDS, [], true);
 
-            if ($code !== 0 || !self::waitForMount($volume['MOUNTPOINT'], 3)) {
+            if ($code !== 0) {
                 $reason = self::summarizeEncfsOutput($stdout, $stderr, $code);
                 self::log("Mount of '$name' failed ($origin): $reason", LOG_WARNING);
                 throw new EncfsError("Mount failed: $reason");
+            }
+            if (!self::waitForMount($volume['MOUNTPOINT'], 3)) {
+                $where = self::canonicalMountpoint($volume['MOUNTPOINT']);
+                self::log("encfs reported success for '$name' but no mount appeared at $where ($origin)", LOG_WARNING);
+                throw new EncfsError("encfs reported success, but no EncFS mount was found at $where. Check the Recent EncFS log.");
             }
 
             self::log("Mounted '$name' at {$volume['MOUNTPOINT']} ($origin)");
@@ -935,10 +968,15 @@ class Encfs
             $args = self::buildEncfsArgs($name, $volume, $mode);
             [$code, $stdout, $stderr] = self::run($args, $password . "\n", self::MOUNT_TIMEOUT_SECONDS, [], true);
 
-            if ($code !== 0 || !self::waitForMount($volume['MOUNTPOINT'], 3)) {
+            if ($code !== 0) {
                 $reason = self::summarizeEncfsOutput($stdout, $stderr, $code);
                 self::log("Initializing '$name' failed: $reason", LOG_WARNING);
                 throw new EncfsError("Initialization failed: $reason");
+            }
+            if (!self::waitForMount($volume['MOUNTPOINT'], 3)) {
+                $where = self::canonicalMountpoint($volume['MOUNTPOINT']);
+                self::log("encfs created '$name' but no mount appeared at $where", LOG_WARNING);
+                throw new EncfsError("The volume was created, but no EncFS mount was found at $where. Check the Recent EncFS log.");
             }
 
             self::log("Created new $mode encfs volume '$name' in {$volume['ENCDIR']} and mounted it at {$volume['MOUNTPOINT']}");

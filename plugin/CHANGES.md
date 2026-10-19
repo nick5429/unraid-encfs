@@ -1,3 +1,7 @@
+### 2026.10.19b
+- Fix: volumes whose mount point is inside an exclusive share (where /mnt/user/<share> is a symlink to the pool) mounted correctly but were reported as failed / "Not mounted". Mount detection now resolves symlinked parent directories.
+- Clearer message if encfs reports success but no mount appears
+
 ### 2026.10.19a
 - Fix: Save/Mount could hang on "Saving..." - the page now posts URL-encoded requests like the rest of the webGUI (multipart bodies stall before reaching PHP on Unraid 7.3.2)
 - Requests now time out with an error message instead of waiting indefinitely

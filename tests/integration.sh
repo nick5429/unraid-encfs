@@ -126,6 +126,17 @@ check "automount" "${MGR[@]}" automount
 check "mounted read-only at path with space" bash -c "${MGR[*]} list | grep -q 'mounted (read-only)'"
 check_fails "write refused on read-only" touch "$TEST_ROOT/dec/with space/vol/new"
 
+echo "Mount point behind a symlinked share (Unraid exclusive shares)"
+mkdir -p "$TEST_ROOT/pool/exclusive"
+ln -s "$TEST_ROOT/pool/exclusive" "$TEST_ROOT/dec/exclusive"
+check "point volume at symlinked share" php_call "\$v = Encfs::getVolume('vol'); \$v['MOUNTPOINT']='$TEST_ROOT/dec/exclusive/vol'; \$v['READONLY']='no'; \$v['AUTOMOUNT']='no'; Encfs::unmount('vol', false, 't'); Encfs::saveVolume('vol', \$v, 'vol');"
+check "mount via symlinked path" bash -c "echo '$PW' | ${MGR[*]} mount vol --stdin"
+check "kernel lists the resolved path" is_mounted "$TEST_ROOT/pool/exclusive/vol"
+check "reported as mounted with pid" bash -c "${MGR[*]} list | grep -q 'mounted, pid'"
+check "unmount via symlinked path" "${MGR[@]}" unmount vol
+check_fails "gone" is_mounted "$TEST_ROOT/pool/exclusive/vol"
+echo "$PW" | "${MGR[@]}" mount vol --stdin >/dev/null 2>&1
+
 echo "Array stop"
 mkdir -p "$TEST_ROOT/dec/manual"
 echo "$PW" | /usr/local/bin/encfs -S --public "$ENC" "$TEST_ROOT/dec/manual" >/dev/null 2>&1
